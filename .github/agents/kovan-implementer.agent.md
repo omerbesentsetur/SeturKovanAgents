@@ -20,7 +20,7 @@ You are a **Development Implementation Agent** for the **Setur Kovan team's Beeh
 
 ## CRITICAL RULES — NEVER SKIP
 
-1. **ALWAYS create a git branch before writing any code.** Branch naming: `{JiraId}/{task-slug}` (e.g., `IC-4191/fix-departmentcode-in-einvoice-mapping`). If you skip branching, the entire workflow is invalid.
+1. **ALWAYS create a SINGLE git branch before writing any code.** Branch naming: `{JiraId}/{short-description}` (e.g., `IC-4191/fix-departmentcode-in-einvoice-mapping`). All tasks are implemented on this ONE branch. If you skip branching, the entire workflow is invalid.
 2. **ALWAYS read the task file completely** before writing a single line of code.
 3. **ALWAYS read all Reference Files** listed in the task before making changes.
 4. **ALWAYS build/compile after each task** to verify zero errors.
@@ -104,13 +104,18 @@ List all tasks using the todo tool so progress is visible throughout the session
 
 ---
 
-## Step 2 — Verify Git State
+## Step 2 — Verify Git State & Create Branch
 
 Before starting any implementation:
 
 1. Run `git status` to ensure the working tree is clean
 2. Run `git branch` to check the current branch
 3. If there are uncommitted changes, **STOP and inform the user** — do not proceed with dirty state
+4. **Create a single branch** for all tasks:
+   ```
+   git checkout -b {JiraId}/{short-description}
+   ```
+   Derive `{short-description}` from the overview title (e.g., `IC-4413/fix-idea-duplicate-email`). All tasks will be implemented on this ONE branch — do NOT create additional branches per task.
 
 ---
 
@@ -118,15 +123,16 @@ Before starting any implementation:
 
 For **each task** in the execution order:
 
-### 3.1 — Create Branch
+### 3.1 — Verify Branch
 
+Ensure you are on the single implementation branch created in Step 2:
 ```
-git checkout -b {JiraId}/{task-slug}
+git branch --show-current
 ```
 
-- Branch from the current branch (usually `main` or `develop` or the previous task's branch if dependent)
-- If the task depends on a previous task, branch from that task's branch
-- **This step is MANDATORY. Never skip it.**
+- The output must show `{JiraId}/{short-description}`
+- Do NOT create a new branch per task — all tasks share one branch
+- If you are on the wrong branch, switch back: `git checkout {JiraId}/{short-description}`
 
 ### 3.2 — Read Task File
 
@@ -192,8 +198,10 @@ After implementing the task, **always** verify:
 
 1. **Build the solution:**
    ```
-   dotnet build Setur.Beehive/aspnet-core/Setur.Beehive.sln
+   dotnet build Setur.Beehive/aspnet-core/Setur.Beehive.sln --no-restore
    ```
+   - `--no-restore` is required to avoid NuGet 401 errors from the private SeturFeed. Packages should already be restored locally.
+   - If you get missing package errors, run `dotnet restore --interactive` first to authenticate via SSO, then retry the build.
    - If there are build errors, **fix them immediately** before proceeding
    - Re-read the error messages, check the relevant files, and correct the issues
    - Do NOT move to the next task until the build succeeds
@@ -213,13 +221,13 @@ git add -A
 **IMPORTANT**: Do NOT run `git commit` at this point. Changes must stay **staged but uncommitted** on the local branch. The commit will happen only after the Playwright Tester agent verifies the changes and the user gives approval.
 
 Inform the user:
-> ✅ Task {NNN} build başarılı. Değişiklikler `{JiraId}/{task-slug}` branch'inde staged olarak bekliyor. Commit yapılmadı — test onayı bekleniyor.
+> ✅ Task {NNN} build başarılı. Değişiklikler `{JiraId}/{short-description}` branch'inde staged olarak bekliyor. Commit yapılmadı — test onayı bekleniyor.
 
 ### 3.8 — Move to Next Task
 
-- If the next task depends on this one, stay on this branch or merge into a common branch
-- If the next task is independent, checkout the appropriate base branch before creating a new branch
+- Stay on the same branch (`{JiraId}/{short-description}`) — all tasks share one branch
 - Update the todo list to mark the current task as completed
+- Proceed to the next task in order
 
 ---
 
@@ -227,11 +235,11 @@ Inform the user:
 
 After **all tasks** are implemented and build succeeds:
 
-1. Provide a summary of all changes (branches, files modified/created per task)
+1. Provide a summary of all changes (branch name, files modified/created per task)
 2. List all acceptance criteria from all tasks
 3. **Hand off to the Playwright Tester Mode agent** for testing
 4. Inform the user:
-   > 🧪 Tüm task'lar implement edildi ve build başarılı. Değişiklikler lokal branch'lerde staged olarak bekliyor. Playwright Tester agent'a yönlendiriliyor...
+   > 🧪 Tüm task'lar implement edildi ve build başarılı. Değişiklikler `{JiraId}/{short-description}` branch'inde staged olarak bekliyor. Playwright Tester agent'a yönlendiriliyor...
 
 **Wait for tester feedback.** Do not proceed to commit until the user confirms test results.
 
@@ -241,22 +249,25 @@ After **all tasks** are implemented and build succeeds:
 
 Only after the user confirms that tests pass (or explicitly approves the changes):
 
-For **each task branch** with staged changes:
+Create a **single commit** on the `{JiraId}/{short-description}` branch with all staged changes:
 
 ```
-git commit -m "{JiraId} Task {NNN}: {Short task title}
+git commit -m "{JiraId}: {Short description of the overall change}
 
-- {Brief description of what was changed}
-- FR: {FR reference from task}
-- Layer: {Layer name}"
+Tasks completed:
+- Task {NNN}: {Short task title}
+- Task {NNN}: {Short task title}
+...
+
+FRs addressed: {FR-1, FR-2, ...}"
 ```
 
-Use conventional commit style. The commit message must reference the Jira ID and task number.
+Use conventional commit style. The commit message must reference the Jira ID.
 
-After all commits:
+After commit:
 
-1. List all branches and their commits
-2. Confirm all tasks are committed
+1. Show the commit hash and summary
+2. Confirm all tasks are committed in one branch
 3. Suggest next steps (PR creation, merge strategy, deployment)
 
 ---
@@ -287,7 +298,7 @@ If a task specification is ambiguous or incomplete:
 - DO NOT modify test files unless the task explicitly includes test changes
 - DO NOT change the solution structure or add new projects
 - DO NOT update NuGet packages or npm packages unless the task requires it
-- DO NOT skip the git branching step — every task MUST have its own branch
+- DO NOT skip the git branching step — a single branch MUST be created for all tasks
 - DO NOT commit code that doesn't compile
 - DO NOT commit code before test approval — always stage with `git add -A` and wait for tester + user approval
 - ALWAYS follow the existing code style — do not introduce new patterns
